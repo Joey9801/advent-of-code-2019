@@ -80,28 +80,6 @@ impl ProgramState {
     }
 }
 
-fn main() {
-    let file = File::open("./input.txt").expect("Failed to open input file");
-    let reader = BufReader::new(file);
-
-    let mut values: Vec<usize> = reader
-        .split(b',')
-        .map(|el| el.expect("Failed to read bytes from file"))
-        .map(|el| String::from_utf8(el).expect("Bytes between a comma weren't UTF8"))
-        .map(|el| el.trim().to_string())
-        .map(|el| el.parse::<usize>().expect(&format!("Failed to parse {} as u64", el)))
-        .collect();
-
-    // Perform the mutations required by the puzzle
-    values[1] = 12;
-    values[2] = 2;
-
-    let mut program = ProgramState::new(values);
-    program.run_to_completion();
-
-    println!("Final value in position 0: {}", program.values[0]);
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -121,9 +99,38 @@ mod tests {
     }
 
     #[test]
-    fn test_larger() {
+    fn test_nontrivial() {
         let mut program = ProgramState::new(vec![1,1,1,4,99,5,6,0,99]);
         program.run_to_completion();
         assert_eq!(program.values, vec![30,1,1,4,2,5,6,0,99]);
+    }
+}
+
+fn main() {
+    let file = File::open("./input.txt").expect("Failed to open input file");
+    let reader = BufReader::new(file);
+
+    let values: Vec<usize> = reader
+        .split(b',')
+        .map(|el| el.expect("Failed to read bytes from file"))
+        .map(|el| String::from_utf8(el).expect("Bytes between a comma weren't UTF8"))
+        .map(|el| el.trim().to_string())
+        .map(|el| el.parse::<usize>().expect(&format!("Failed to parse {} as u64", el)))
+        .collect();
+
+    let target = 19690720usize;
+
+    'outer: for noun in 0..100 {
+        for verb in 0..100 {
+            let mut program = ProgramState::new(values.clone());
+            program.values[1] = noun;
+            program.values[2] = verb;
+            program.run_to_completion();
+
+            if program.values[0] == target {
+                println!("Found solution: {}", 100 * noun + verb);
+                break 'outer;
+            }
+        }
     }
 }
