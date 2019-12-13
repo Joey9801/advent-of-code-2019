@@ -49,7 +49,7 @@ struct Line {
     origin: Vector2,
 
     /// The vector from the start of this wire to its terminus
-    /// 
+    ///
     /// Expect that this is zero in precisely one of (x, y)
     span: Vector2,
 }
@@ -71,6 +71,11 @@ impl Line {
         };
 
         in_x && in_y
+    }
+
+    /// The distance from the origin of this line to the given point
+    fn distance_to(&self, point: Vector2) -> u64 {
+        (self.origin - point).l1_norm()
     }
 
     /// If this line intersects with the other, the point at which they intersect
@@ -95,12 +100,18 @@ impl Line {
     }
 }
 
+#[derive(Clone, Copy)]
+struct WireNode {
+    point: Vector2,
+    length_before: u64,
+}
+
 /// Represents a wire made up multiple line segments
 struct Wire {
     /// The line segments in this wire go between the nodes.
-    /// 
+    ///
     /// For AoC day 2, part 1, the first node should be (0, 0)
-    nodes: Vec<Vector2>,
+    nodes: Vec<WireNode>,
 }
 
 impl Wire {
@@ -108,8 +119,12 @@ impl Wire {
         assert!(input.is_ascii());
 
         let mut cursor = Vector2::new(0, 0);
-        let mut nodes = vec![cursor.clone()];
+        let mut nodes = vec![WireNode {
+                point: cursor.clone(),
+                length_before: 0,
+        }];
 
+        let mut total_len: u64 = 0;
         for instr in input.split(",") {
             let dir = &instr[0..1];
             let len: i64  = instr[1..]
@@ -124,7 +139,12 @@ impl Wire {
                 other => panic!(format!("Unknown direction '{}'", other)),
             }
 
-            nodes.push(cursor.clone());
+            total_len += len.abs() as u64;
+
+            nodes.push(WireNode {
+                point: cursor.clone(),
+                length_before: total_len,
+            });
         }
 
         Self {
@@ -132,13 +152,20 @@ impl Wire {
         }
     }
 
-    fn iter_lines<'a>(&'a self) -> impl Iterator<Item = Line> + 'a {
+    fn iter_lines<'a>(&'a self) -> impl Iterator<Item = (Line, u64)> + 'a {
         self.nodes
             .windows(2)
-            .map(|parts| Line {
-                origin: parts[0],
-                span: parts[1] - parts[0],
-            })
+            .map(|parts| (
+                    Line {
+                    origin: parts[0].point,
+                    span: parts[1].point - parts[0].point,
+                },
+                parts[0].length_before,
+            ))
+    }
+
+    fn iter_lengths<'a>(&'a self) -> impl Iterator<Item = u64> + 'a {
+        self.nodes.iter().map(|n| n.length_before)
     }
 }
 
@@ -153,11 +180,14 @@ fn main()  {
     let a = wires.next().expect("Expected exactly two wires");
     let b = wires.next().expect("Expected exactly two wires");
 
-    let min_intersection = a.iter_lines().filter_map(|a_line| {
-        b.iter_lines().filter_map(|b_line| {
-            a_line.intersection_point(&b_line).map(|i| i.l1_norm())
-        })
-        .min()
+    let min_intersection = a.iter_lines().filter_map(|(a_line, a_base_length)| {
+            b.iter_lines().filter_map(|(b_line, b_base_length)| {
+                a_line.intersection_point(&b_line).map(|point|
+                    a_base_length + a_line.distance_to(point) +
+                    b_base_length + b_line.distance_to(point)
+                )
+            })
+            .min()
     }).min();
 
     println!("Minimum intersection: {:?}", min_intersection);
