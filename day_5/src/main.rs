@@ -43,9 +43,13 @@ impl Parameter {
 enum OpCode {
     Add,
     Multiply,
-    Terminate,
     ReadInput,
     WriteOutput,
+    JumpIfTrue,
+    JumpIfFalse,
+    LessThan,
+    Equals,
+    Terminate,
 }
 
 impl OpCode {
@@ -55,6 +59,10 @@ impl OpCode {
             2 => OpCode::Multiply,
             3 => OpCode::ReadInput,
             4 => OpCode::WriteOutput,
+            5 => OpCode::JumpIfTrue,
+            6 => OpCode::JumpIfFalse,
+            7 => OpCode::LessThan,
+            8 => OpCode::Equals,
             99 => OpCode::Terminate,
             code => panic!("Unrecognized opcode: {}", code)
         }
@@ -64,9 +72,13 @@ impl OpCode {
         match self {
             OpCode::Add => 4,
             OpCode::Multiply => 4,
-            OpCode::Terminate => 1,
             OpCode::ReadInput => 2,
             OpCode::WriteOutput => 2,
+            OpCode::JumpIfTrue => 3,
+            OpCode::JumpIfFalse => 3,
+            OpCode::LessThan => 4,
+            OpCode::Equals => 4,
+            OpCode::Terminate => 1,
         }
     }
 }
@@ -109,6 +121,7 @@ impl Instruction {
     }
 
     fn execute(&self, state: &mut ProgramState) {
+        let mut jumped = false;
         match self.opcode {
             OpCode::Add => {
                 let a = self.read_param(0, state);
@@ -125,7 +138,37 @@ impl Instruction {
                 self.write_param(0, state, input);
             }
             OpCode::WriteOutput => state.outputs.push(self.read_param(0, state)),
+            OpCode::JumpIfTrue => {
+                let test = self.read_param(0, state);
+                if test != 0 {
+                    let target = self.read_param(1, state) as usize;
+                    state.program_counter = target;
+                    jumped = true;
+                }
+            }
+            OpCode::JumpIfFalse => {
+                let test = self.read_param(0, state);
+                if test == 0 {
+                    let target = self.read_param(1, state) as usize;
+                    state.program_counter = target;
+                    jumped = true;
+                }
+            }
+            OpCode::LessThan => {
+                let a = self.read_param(0, state);
+                let b = self.read_param(1, state);
+                self.write_param(2, state, if a < b { 1 } else { 0 });
+            }
+            OpCode::Equals => {
+                let a = self.read_param(0, state);
+                let b = self.read_param(1, state);
+                self.write_param(2, state, if a == b { 1 } else { 0 });
+            }
             OpCode::Terminate => state.terminated = true,
+        }
+
+        if !jumped {
+            state.program_counter += self.opcode.length();
         }
     }
 }
@@ -155,7 +198,6 @@ impl ProgramState {
     fn progress_state(&mut self) {
         let instr = Instruction::fetch_and_decode(self);
         instr.execute(self);
-        self.program_counter += instr.opcode.length();
     }
 
     fn run_to_completion(&mut self) {
@@ -171,23 +213,41 @@ mod tests {
 
     #[test]
     fn test_add() {
-        let mut program = ProgramState::new(vec![1, 0, 0, 0, 99]);
+        let mut program = ProgramState::new(vec![1, 0, 0, 0, 99], VecDeque::new());
         program.run_to_completion();
         assert_eq!(program.mem, vec![2, 0, 0, 0, 99]);
     }
 
     #[test]
     fn test_mul() {
-        let mut program = ProgramState::new(vec![2, 3, 0, 3, 99]);
+        let mut program = ProgramState::new(vec![2, 3, 0, 3, 99], VecDeque::new());
         program.run_to_completion();
         assert_eq!(program.mem, vec![2, 3, 0, 6, 99]);
     }
 
     #[test]
     fn test_nontrivial() {
-        let mut program = ProgramState::new(vec![1,1,1,4,99,5,6,0,99]);
+        let mut program = ProgramState::new(vec![1,1,1,4,99,5,6,0,99], VecDeque::new());
         program.run_to_completion();
         assert_eq!(program.mem, vec![30,1,1,4,2,5,6,0,99]);
+    }
+
+    #[test]
+    fn test_jump_if_true() {
+        fn run(input: ProgramElement) -> ProgramElement {
+            let mut inputs = VecDeque::new();
+            inputs.push_back(input);
+            // Problem statement claims that this program outputs 0 if the input is 0, or 1 if it was non-zero
+            let mut program = ProgramState::new(
+                vec![3,12,6,12,15,1,13,14,13,4,13,99,-1,0,1,9],
+                inputs
+            );
+            program.run_to_completion();
+            program.outputs[0]
+        }
+
+        assert_eq!(run(0), 0);
+        assert_eq!(run(4), 1);
     }
 }
 
@@ -204,7 +264,7 @@ fn main() {
         .collect();
 
     let mut inputs = VecDeque::new();
-    inputs.push_back(1);
+    inputs.push_back(5);
     let mut program = ProgramState::new(initial_mem, inputs);
     program.run_to_completion();
     println!("Program outputs = {:?}", program.outputs);
