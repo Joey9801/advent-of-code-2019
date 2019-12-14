@@ -1,5 +1,6 @@
 use std::fs::File;
 use std::io::{prelude::*, BufReader};
+use std::collections::VecDeque;
 
 type ProgramElement = isize;
 
@@ -26,14 +27,14 @@ struct Parameter {
 impl Parameter {
     fn read(&self, state: &ProgramState) -> ProgramElement {
         match self.mode {
-            ParameterMode::Position => state.values[self.contents as usize],
+            ParameterMode::Position => state.mem[self.contents as usize],
             ParameterMode::Immediate => self.contents,
         }
     }
 
     fn write(&self, state: &mut ProgramState, value: ProgramElement) {
         match self.mode {
-            ParameterMode::Position => state.values[self.contents as usize] = value,
+            ParameterMode::Position => state.mem[self.contents as usize] = value,
             ParameterMode::Immediate => panic!("Attempting to write to an immediate mode parameter"),
         }
     }
@@ -43,6 +44,8 @@ enum OpCode {
     Add,
     Multiply,
     Terminate,
+    ReadInput,
+    WriteOutput,
 }
 
 impl OpCode {
@@ -50,6 +53,8 @@ impl OpCode {
         match element % 100 {
             1 => OpCode::Add,
             2 => OpCode::Multiply,
+            3 => OpCode::ReadInput,
+            4 => OpCode::WriteOutput,
             99 => OpCode::Terminate,
             code => panic!("Unrecognized opcode: {}", code)
         }
@@ -60,6 +65,8 @@ impl OpCode {
             OpCode::Add => 4,
             OpCode::Multiply => 4,
             OpCode::Terminate => 1,
+            OpCode::ReadInput => 2,
+            OpCode::WriteOutput => 2,
         }
     }
 }
@@ -72,15 +79,15 @@ struct Instruction {
 
 impl Instruction {
     fn fetch_and_decode(state: &ProgramState) -> Self {
-        let opcode = OpCode::from_element(&state.values[state.program_counter]);
+        let opcode = OpCode::from_element(&state.mem[state.program_counter]);
 
         let mut parameters = [None, None, None, None];
-        let mut parameter_modes = state.values[state.program_counter] / 100;
+        let mut parameter_modes = state.mem[state.program_counter] / 100;
 
         for i in 1..opcode.length() {
             let mode = ((parameter_modes % 10) as u8).into();
             parameter_modes /= 10;
-            let contents = state.values[state.program_counter + i].clone();
+            let contents = state.mem[state.program_counter + i].clone();
             parameters[i - 1] = Some(Parameter {
                 mode,
                 contents,
@@ -113,6 +120,11 @@ impl Instruction {
                 let b = self.read_param(1, state);
                 self.write_param(2, state, a * b);
             }
+            OpCode::ReadInput => {
+                let input = state.inputs.pop_front().expect("Ran out of inputs");
+                self.write_param(0, state, input);
+            }
+            OpCode::WriteOutput => state.outputs.push(self.read_param(0, state)),
             OpCode::Terminate => state.terminated = true,
         }
     }
@@ -120,17 +132,21 @@ impl Instruction {
 
 
 struct ProgramState {
-    values: Vec<ProgramElement>,
+    mem: Vec<ProgramElement>,
+    inputs: VecDeque<ProgramElement>,
+    outputs: Vec<ProgramElement>,
     program_counter: usize,
     terminated: bool,
 }
 
 impl ProgramState {
-    fn new(values: Vec<ProgramElement>) -> Self {
-        debug_assert!(values.len() > 0);
+    fn new(mem: Vec<ProgramElement>, inputs: VecDeque<ProgramElement>) -> Self {
+        debug_assert!(mem.len() > 0);
 
         Self {
-            values,
+            mem,
+            inputs,
+            outputs: Vec::new(),
             program_counter: 0,
             terminated: false,
         }
@@ -157,21 +173,21 @@ mod tests {
     fn test_add() {
         let mut program = ProgramState::new(vec![1, 0, 0, 0, 99]);
         program.run_to_completion();
-        assert_eq!(program.values, vec![2, 0, 0, 0, 99]);
+        assert_eq!(program.mem, vec![2, 0, 0, 0, 99]);
     }
 
     #[test]
     fn test_mul() {
         let mut program = ProgramState::new(vec![2, 3, 0, 3, 99]);
         program.run_to_completion();
-        assert_eq!(program.values, vec![2, 3, 0, 6, 99]);
+        assert_eq!(program.mem, vec![2, 3, 0, 6, 99]);
     }
 
     #[test]
     fn test_nontrivial() {
         let mut program = ProgramState::new(vec![1,1,1,4,99,5,6,0,99]);
         program.run_to_completion();
-        assert_eq!(program.values, vec![30,1,1,4,2,5,6,0,99]);
+        assert_eq!(program.mem, vec![30,1,1,4,2,5,6,0,99]);
     }
 }
 
@@ -179,7 +195,7 @@ fn main() {
     let file = File::open("./input.txt").expect("Failed to open input file");
     let reader = BufReader::new(file);
 
-    let values: Vec<_> = reader
+    let initial_mem: Vec<_> = reader
         .split(b',')
         .map(|el| el.expect("Failed to read bytes from file"))
         .map(|el| String::from_utf8(el).expect("Bytes between a comma weren't UTF8"))
@@ -187,19 +203,9 @@ fn main() {
         .map(|el| el.parse::<ProgramElement>().expect(&format!("Failed to parse {} as u64", el)))
         .collect();
 
-    let target = 19690720;
-
-    'outer: for noun in 0..100 {
-        for verb in 0..100 {
-            let mut program = ProgramState::new(values.clone());
-            program.values[1] = noun;
-            program.values[2] = verb;
-            program.run_to_completion();
-
-            if program.values[0] == target {
-                println!("Found solution: {}", 100 * noun + verb);
-                break 'outer;
-            }
-        }
-    }
+    let mut inputs = VecDeque::new();
+    inputs.push_back(1);
+    let mut program = ProgramState::new(initial_mem, inputs);
+    program.run_to_completion();
+    println!("Program outputs = {:?}", program.outputs);
 }
