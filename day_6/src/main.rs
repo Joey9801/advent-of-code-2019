@@ -1,5 +1,5 @@
 use std::fs::File;
-use std::io::{self, prelude::*, BufReader};
+use std::io::{prelude::*, BufReader};
 use std::collections::HashMap;
 
 struct Object {
@@ -75,8 +75,8 @@ impl OrbitMap {
         let mut process_list: Vec<usize> = self.object_storage
             .iter()
             .enumerate()
-            .filter(|(id, object)| object.parent_id.is_none())
-            .map(|(id, object)| id)
+            .filter(|(_id, object)| object.parent_id.is_none())
+            .map(|(id, _object)| id)
             .collect();
 
         while process_list.len() > 0 {
@@ -90,6 +90,28 @@ impl OrbitMap {
             process_list.extend(&self.object_storage[id].children);
         }
     }
+
+    /// The ID of the first common ancestor of two nodes
+    pub fn lowest_common_ancestor(&self, a: usize, b: usize) -> Option<usize> {
+        // Populate a set of A's lineage. For deep maps a HashSet would be more efficient.
+        let mut a_ancestry = Vec::new();
+        let mut cursor = Some(a);
+        while cursor.is_some() {
+            a_ancestry.push(cursor.unwrap());
+            cursor = self.object_storage[cursor.unwrap()].parent_id;
+        }
+
+        // Find the first element in B's lineage that is in A's lineage.
+        cursor = Some(b);
+        while cursor.is_some() {
+            if a_ancestry.contains(&cursor.unwrap()) {
+                return cursor;
+            }
+            cursor = self.object_storage[cursor.unwrap()].parent_id;
+        }
+
+        None
+    }
 }
 
 fn main() {
@@ -99,13 +121,21 @@ fn main() {
     for line in BufReader::new(file).lines() {
         orbit_map.add_orbit(&line.expect("Failed to read line"));
     }
-
     orbit_map.compute_depths();
 
-    let total: u32 = orbit_map.object_storage
-        .iter()
-        .filter_map(|o| o.depth)
-        .sum();
+    let you_id = *orbit_map.object_names.get("YOU").expect("There is no object called YOU");
+    let san_id = *orbit_map.object_names.get("SAN").expect("There is no object called SAN");
 
-    println!("Total orbit count: {:?}", total);
+    let source_id = orbit_map.object_storage[you_id].parent_id.expect("YOU is a root");
+    let target_id = orbit_map.object_storage[san_id].parent_id.expect("SAN is a root");
+
+    let lca_id = orbit_map.lowest_common_ancestor(source_id, target_id).expect("YOU and SAN share no common ancestor");
+
+    let source_depth = orbit_map.object_storage[source_id].depth.unwrap();
+    let target_depth = orbit_map.object_storage[target_id].depth.unwrap();
+    let lca_depth = orbit_map.object_storage[lca_id].depth.unwrap();
+
+    let path_len = source_depth + target_depth - 2*lca_depth;
+
+    println!("Shortest path from YOU.parent -> SAN.parent = {}", path_len);
 }
