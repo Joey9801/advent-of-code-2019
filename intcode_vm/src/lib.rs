@@ -1,3 +1,5 @@
+use std::fs::File;
+use std::io::{prelude::*, BufReader};
 use std::collections::VecDeque;
 
 pub type ProgramElement = isize;
@@ -181,6 +183,28 @@ pub struct ProgramState {
 }
 
 impl ProgramState {
+    /// Loads a comma-separated program source file, leaves the input queue empty.
+    pub fn load_program_file(path: &std::path::Path) -> Self {
+        let file = File::open(path).expect("Failed to open program source");
+        let reader = BufReader::new(file);
+
+        let initial_mem: Vec<_> = reader
+            .split(b',')
+            .map(|el| el.expect("Failed to read bytes from file"))
+            .map(|el| String::from_utf8(el).expect("Bytes between a comma weren't UTF8"))
+            .map(|el| el.trim().to_string())
+            .map(|el| el.parse::<ProgramElement>().expect(&format!("Failed to parse {} as u64", el)))
+            .collect();
+
+        Self {
+            mem: initial_mem,
+            inputs: Vec::new().into(),
+            outputs: Vec::new(),
+            program_counter: 0,
+            terminated: false,
+        }
+    }
+
     pub fn new(mem: Vec<ProgramElement>, inputs: VecDeque<ProgramElement>) -> Self {
         debug_assert!(mem.len() > 0);
 
