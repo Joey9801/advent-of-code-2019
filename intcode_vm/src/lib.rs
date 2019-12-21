@@ -83,6 +83,9 @@ impl OpCode {
     }
 }
 
+pub enum ExecuteError {
+    NoInput
+}
 
 struct Instruction {
     opcode: OpCode,
@@ -120,7 +123,7 @@ impl Instruction {
         self.parameters[idx].as_ref().unwrap().write(state, value)
     }
 
-    fn execute(&self, state: &mut ProgramState) {
+    fn execute(&self, state: &mut ProgramState) -> Result<(), ExecuteError> {
         let mut jumped = false;
         match self.opcode {
             OpCode::Add => {
@@ -134,7 +137,10 @@ impl Instruction {
                 self.write_param(2, state, a * b);
             }
             OpCode::ReadInput => {
-                let input = state.inputs.pop_front().expect("Ran out of inputs");
+                let input = state.inputs
+                    .pop_front()
+                    .ok_or(ExecuteError::NoInput)?;
+
                 self.write_param(0, state, input);
             }
             OpCode::WriteOutput => state.outputs.push(self.read_param(0, state)),
@@ -170,6 +176,8 @@ impl Instruction {
         if !jumped {
             state.program_counter += self.opcode.length();
         }
+
+        Ok(())
     }
 }
 
@@ -218,9 +226,18 @@ impl ProgramState {
         }
     }
 
-    pub fn progress_state(&mut self) {
+    pub fn progress_state(&mut self) -> Result<(), ExecuteError> {
         let instr = Instruction::fetch_and_decode(self);
-        instr.execute(self);
+        instr.execute(self)
+    }
+
+    pub fn run_to_next_input(&mut self) {
+        while !self.terminated {
+            match self.progress_state() {
+                Ok(()) => (),
+                Err(ExecuteError::NoInput) => break,
+            }
+        }
     }
 
     pub fn run_to_completion(&mut self) {

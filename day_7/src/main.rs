@@ -5,13 +5,21 @@ fn test_phase_settings(
     phase_settings: &[ProgramElement],
     program: &ProgramState,
 ) -> ProgramElement {
+    let mut amps = Vec::new();
+    for phase_setting in phase_settings {
+        let mut amp = program.clone();
+        amp.inputs.push_back(*phase_setting);
+        amps.push(amp);
+    }
+
     let mut signal = 0;
-    for &phase in phase_settings {
-        let mut instance = program.clone();
-        instance.inputs.push_back(phase);
-        instance.inputs.push_back(signal);
-        instance.run_to_completion();
-        signal = *instance.outputs.first().expect("Amplifier didn't give an output value");
+    let mut idx = 0;
+    while !amps.last().unwrap().terminated {
+        amps[idx].inputs.push_back(signal);
+        amps[idx].run_to_next_input();
+        signal = *amps[idx].outputs.last().unwrap();
+
+        idx = (idx + 1) % amps.len();
     }
 
     signal
@@ -20,7 +28,7 @@ fn test_phase_settings(
 fn main() {
     let program = ProgramState::load_program_file(std::path::Path::new("./input.txt"));
 
-    let mut phases = (0..5).collect::<Vec<isize>>();
+    let mut phases = (5..10).collect::<Vec<isize>>();
     let mut phase_settings = permutohedron::Heap::new(&mut phases);
 
     let (signal, max_phase_setting) = phase_settings
