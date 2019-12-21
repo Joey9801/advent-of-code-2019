@@ -174,6 +174,7 @@ impl Instruction {
 }
 
 
+#[derive(Clone)]
 pub struct ProgramState {
     pub mem: Vec<ProgramElement>,
     pub inputs: VecDeque<ProgramElement>,
