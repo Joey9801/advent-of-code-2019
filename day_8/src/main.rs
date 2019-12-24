@@ -13,13 +13,24 @@ fn main() {
         .chunks(WIDTH * HEIGHT)
         .collect::<Vec<&[u32]>>();
 
-    let min_zero_layer = layers
-        .iter()
-        .min_by_key(|l| l.iter().filter(|x| **x == 0).count())
-        .expect("Failed to find the layer with the fewest zeros");
+    let mut rendered = [' '; WIDTH * HEIGHT];
+    for layer in layers.iter().rev() {
+        for idx in 0..(WIDTH*HEIGHT) {
+            match layer[idx] {
+                0 => rendered[idx] = '░',
+                1 => rendered[idx] = '█',
+                2 => (),
+                _ => unreachable!(),
+            }
+        }
+    }
 
-    let num_ones = min_zero_layer.iter().filter(|x| **x == 1).count();
-    let num_twos = min_zero_layer.iter().filter(|x| **x == 2).count();
-    let answer = num_ones * num_twos;
-    dbg!(answer);
+    for row in rendered.chunks(WIDTH) {
+        for _repeat in 0..2 {
+            for c in row {
+                print!("{}{}{}", c, c, c);
+            }
+            print!("\n");
+        }
+    }
 }
