@@ -1,6 +1,6 @@
 use std::fs::File;
 use std::io::{prelude::*, BufReader};
-use std::collections::VecDeque;
+use std::collections::{HashMap, VecDeque};
 
 pub type ProgramElement = isize;
 
@@ -90,6 +90,7 @@ impl OpCode {
     }
 }
 
+#[derive(Debug)]
 pub enum ExecuteError {
     NoInput
 }
@@ -189,6 +190,38 @@ impl Instruction {
     }
 }
 
+const PAGE_SIZE: usize = 1024;
+
+struct PagedMemory<T: Default + Copy> {
+    /// Maps page index to storage for that page, where page index is floor(addr / PAGE_SIZE)
+    pages: HashMap<usize, [T; PAGE_SIZE]>,
+}
+
+impl<T: Default + Copy> PagedMemory<T> {
+    pub fn new() -> Self {
+        PagedMemory {
+            pages: HashMap::new(),
+        }
+    }
+
+    pub fn read_addr(&self, addr: usize) -> T {
+        let index = addr / PAGE_SIZE;
+        let offset = addr % PAGE_SIZE;
+        match self.pages.get(&index) {
+            Some(page) => page[offset],
+            None => T::default(),
+        }
+    }
+
+    pub fn write_addr(&mut self, addr: usize, value: T) {
+        let index = addr / PAGE_SIZE;
+        let offset = addr % PAGE_SIZE;
+
+        let page = self.pages.entry(index).or_insert([T::default(); PAGE_SIZE]);
+        page[offset] = value;
+    }
+}
+
 
 #[derive(Clone)]
 pub struct ProgramState {
@@ -253,7 +286,7 @@ impl ProgramState {
 
     pub fn run_to_completion(&mut self) {
         while !self.terminated {
-            self.progress_state();
+            self.progress_state().expect("Hit execution error while running to completion");
         }
     }
 }
@@ -261,6 +294,14 @@ impl ProgramState {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_paged_memory() {
+        let mut mem = PagedMemory::<i32>::new();
+        assert_eq!(mem.read_addr(1234 as usize), 0);
+        mem.write_addr(1234 as usize, 42);
+        assert_eq!(mem.read_addr(1234 as usize), 42);
+    }
 
     #[test]
     fn test_add() {
@@ -288,7 +329,8 @@ mod tests {
         fn run(input: ProgramElement) -> ProgramElement {
             let mut inputs = VecDeque::new();
             inputs.push_back(input);
-            // Problem statement claims that this program outputs 0 if the input is 0, or 1 if it was non-zero
+            // Problem statement claims that this program outputs 0 if the input is 0, or
+            // 1 if it was non-zero
             let mut program = ProgramState::new(
                 vec![3,12,6,12,15,1,13,14,13,4,13,99,-1,0,1,9],
                 inputs
