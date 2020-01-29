@@ -7,6 +7,7 @@ pub type ProgramElement = isize;
 enum ParameterMode {
     Position,
     Immediate,
+    Relative,
 }
 
 impl From<u8> for ParameterMode {
@@ -14,6 +15,7 @@ impl From<u8> for ParameterMode {
         match code {
             0 => ParameterMode::Position,
             1 => ParameterMode::Immediate,
+            2 => ParameterMode::Relative,
             code => panic!("Unrecognized parameter mode code: {}", code)
         }
     }
@@ -29,6 +31,7 @@ impl Parameter {
         match self.mode {
             ParameterMode::Position => state.mem[self.contents as usize],
             ParameterMode::Immediate => self.contents,
+            ParameterMode::Relative => state.mem[(state.relative_base + self.contents) as usize]
         }
     }
 
@@ -36,6 +39,7 @@ impl Parameter {
         match self.mode {
             ParameterMode::Position => state.mem[self.contents as usize] = value,
             ParameterMode::Immediate => panic!("Attempting to write to an immediate mode parameter"),
+            ParameterMode::Relative => state.mem[(state.relative_base + self.contents) as usize] = value,
         }
     }
 }
@@ -49,6 +53,7 @@ enum OpCode {
     JumpIfFalse,
     LessThan,
     Equals,
+    AdjustRelativeBase,
     Terminate,
 }
 
@@ -63,6 +68,7 @@ impl OpCode {
             6 => OpCode::JumpIfFalse,
             7 => OpCode::LessThan,
             8 => OpCode::Equals,
+            9 => OpCode::AdjustRelativeBase,
             99 => OpCode::Terminate,
             code => panic!("Unrecognized opcode: {}", code)
         }
@@ -78,6 +84,7 @@ impl OpCode {
             OpCode::JumpIfFalse => 3,
             OpCode::LessThan => 4,
             OpCode::Equals => 4,
+            OpCode::AdjustRelativeBase => 2,
             OpCode::Terminate => 1,
         }
     }
@@ -170,6 +177,7 @@ impl Instruction {
                 let b = self.read_param(1, state);
                 self.write_param(2, state, if a == b { 1 } else { 0 });
             }
+            OpCode::AdjustRelativeBase => state.relative_base += self.read_param(0, state),
             OpCode::Terminate => state.terminated = true,
         }
 
@@ -188,6 +196,7 @@ pub struct ProgramState {
     pub inputs: VecDeque<ProgramElement>,
     pub outputs: Vec<ProgramElement>,
     pub program_counter: usize,
+    pub relative_base: ProgramElement,
     pub terminated: bool,
 }
 
@@ -210,6 +219,7 @@ impl ProgramState {
             inputs: Vec::new().into(),
             outputs: Vec::new(),
             program_counter: 0,
+            relative_base: 0,
             terminated: false,
         }
     }
@@ -222,6 +232,7 @@ impl ProgramState {
             inputs,
             outputs: Vec::new(),
             program_counter: 0,
+            relative_base: 0,
             terminated: false,
         }
     }
