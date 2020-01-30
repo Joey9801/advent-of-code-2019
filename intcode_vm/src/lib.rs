@@ -29,17 +29,26 @@ struct Parameter {
 impl Parameter {
     fn read(&self, state: &ProgramState) -> ProgramElement {
         match self.mode {
-            ParameterMode::Position => state.mem[self.contents as usize],
+            ParameterMode::Position => state.mem.read_addr(self.contents as usize),
             ParameterMode::Immediate => self.contents,
-            ParameterMode::Relative => state.mem[(state.relative_base + self.contents) as usize]
+            ParameterMode::Relative => {
+                let addr = (state.relative_base + self.contents) as usize;
+                state.mem.read_addr(addr)
+            }
         }
     }
 
     fn write(&self, state: &mut ProgramState, value: ProgramElement) {
         match self.mode {
-            ParameterMode::Position => state.mem[self.contents as usize] = value,
+            ParameterMode::Position => {
+                let addr = self.contents as usize;
+                state.mem.write_addr(addr, value);
+            },
+            ParameterMode::Relative => {
+                let addr = (state.relative_base + self.contents) as usize;
+                state.mem.write_addr(addr, value);
+            },
             ParameterMode::Immediate => panic!("Attempting to write to an immediate mode parameter"),
-            ParameterMode::Relative => state.mem[(state.relative_base + self.contents) as usize] = value,
         }
     }
 }
@@ -102,15 +111,16 @@ struct Instruction {
 
 impl Instruction {
     fn fetch_and_decode(state: &ProgramState) -> Self {
-        let opcode = OpCode::from_element(&state.mem[state.program_counter]);
+        let raw_instr = state.mem.read_addr(state.program_counter);
+        let opcode = OpCode::from_element(&raw_instr);
 
         let mut parameters = [None, None, None, None];
-        let mut parameter_modes = state.mem[state.program_counter] / 100;
+        let mut parameter_modes = raw_instr / 100;
 
         for i in 1..opcode.length() {
             let mode = ((parameter_modes % 10) as u8).into();
             parameter_modes /= 10;
-            let contents = state.mem[state.program_counter + i].clone();
+            let contents = state.mem.read_addr(state.program_counter + i);
             parameters[i - 1] = Some(Parameter {
                 mode,
                 contents,
@@ -192,7 +202,8 @@ impl Instruction {
 
 const PAGE_SIZE: usize = 1024;
 
-struct PagedMemory<T: Default + Copy> {
+#[derive(Clone)]
+pub struct PagedMemory<T: Default + Copy> {
     /// Maps page index to storage for that page, where page index is floor(addr / PAGE_SIZE)
     pages: HashMap<usize, [T; PAGE_SIZE]>,
 }
@@ -222,10 +233,66 @@ impl<T: Default + Copy> PagedMemory<T> {
     }
 }
 
+impl<T> std::fmt::Debug for PagedMemory<T>
+where
+    T: Default + Copy + std::fmt::Debug + std::fmt::Display + PartialEq
+{
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        writeln!(f, "PagedMemory {{")?;
+        let mut keys: Vec<_> = self.pages.keys().collect();
+        keys.sort();
+        for (&&index, page) in keys.iter().map(|k| (k, self.pages.get(k).unwrap())) {
+            let start_addr = index * PAGE_SIZE;
+            let end_addr = (index + 1) * PAGE_SIZE - 1;
+            writeln!(f, "  Page {} (0x{:06x}..0x{:06x})", index, start_addr, end_addr)?;
+
+            let row_len = 16;
+            for row in (0..(PAGE_SIZE / row_len)).map(|r| r * row_len) {
+                if page[row..(row + row_len)].iter().all(|v| *v == T::default()) {
+                    continue;
+                }
+                write!(f, "    0x{:06x}: ", start_addr + row)?;
+                for col in 0..row_len {
+                    write!(f, "{:4} ", page[row + col])?;
+                }
+
+                write!(f, "\n")?;
+            }
+        }
+
+        writeln!(f, "}}")
+    }
+}
+
+impl<T, I> From<I> for PagedMemory<T>
+where
+    T: Default + Copy,
+    I: IntoIterator<Item = T>
+{
+    fn from(source: I) -> PagedMemory<T> {
+        let mut mem = PagedMemory::new();
+        for (addr, value) in source.into_iter().enumerate() {
+            mem.write_addr(addr, value)
+        }
+        mem
+    }
+}
+
+impl<T: Default + Copy + PartialEq> PartialEq<Vec<T>> for PagedMemory<T> {
+    fn eq(&self, other: &Vec<T>) -> bool {
+        for (addr, value) in other.iter().enumerate() {
+            if self.read_addr(addr) != *value {
+                return false;
+            }
+        }
+
+        true
+    }
+}
 
 #[derive(Clone)]
 pub struct ProgramState {
-    pub mem: Vec<ProgramElement>,
+    pub mem: PagedMemory<ProgramElement>,
     pub inputs: VecDeque<ProgramElement>,
     pub outputs: Vec<ProgramElement>,
     pub program_counter: usize,
@@ -239,13 +306,13 @@ impl ProgramState {
         let file = File::open(path).expect("Failed to open program source");
         let reader = BufReader::new(file);
 
-        let initial_mem: Vec<_> = reader
+        let initial_mem = reader
             .split(b',')
             .map(|el| el.expect("Failed to read bytes from file"))
             .map(|el| String::from_utf8(el).expect("Bytes between a comma weren't UTF8"))
             .map(|el| el.trim().to_string())
             .map(|el| el.parse::<ProgramElement>().expect(&format!("Failed to parse {} as u64", el)))
-            .collect();
+            .into();
 
         Self {
             mem: initial_mem,
@@ -257,11 +324,9 @@ impl ProgramState {
         }
     }
 
-    pub fn new(mem: Vec<ProgramElement>, inputs: VecDeque<ProgramElement>) -> Self {
-        debug_assert!(mem.len() > 0);
-
+    pub fn new(mem: impl IntoIterator<Item=ProgramElement>, inputs: VecDeque<ProgramElement>) -> Self {
         Self {
-            mem,
+            mem: mem.into(),
             inputs,
             outputs: Vec::new(),
             program_counter: 0,
@@ -335,6 +400,8 @@ mod tests {
                 vec![3,12,6,12,15,1,13,14,13,4,13,99,-1,0,1,9],
                 inputs
             );
+
+            dbg!(&program.mem);
             program.run_to_completion();
             program.outputs[0]
         }
