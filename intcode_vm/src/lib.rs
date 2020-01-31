@@ -200,7 +200,7 @@ impl Instruction {
     }
 }
 
-const PAGE_SIZE: usize = 1024;
+const PAGE_SIZE: usize = 256;
 
 #[derive(Clone)]
 pub struct PagedMemory<T: Default + Copy> {
@@ -253,7 +253,7 @@ where
                 }
                 write!(f, "    0x{:06x}: ", start_addr + row)?;
                 for col in 0..row_len {
-                    write!(f, "{:4} ", page[row + col])?;
+                    write!(f, "{:5} ", page[row + col])?;
                 }
 
                 write!(f, "\n")?;
