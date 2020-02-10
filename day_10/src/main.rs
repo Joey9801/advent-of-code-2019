@@ -1,3 +1,5 @@
+#![feature(slice_partition_dedup)]
+
 use std::fs::File;
 use std::path::Path;
 use std::io::Read;
@@ -67,6 +69,20 @@ impl Coord {
             }, n)
         }
     }
+
+    /// Clockwise angle in radians from straight up.
+    fn angle(&self) -> f32 {
+        // atan2 returns from the range [-pi, +pi] radians from (1, 0)
+        // Additionally, the y coordinate in the puzzle is backwards, ie, +ve y is down.
+        let raw = (-self.y as f32).atan2(self.x as f32);
+        let against_vertical = std::f32::consts::FRAC_PI_2 - raw;
+
+        // Normalize the angle to the range [0, 2*pi]
+        let two_pi = 2f32 * std::f32::consts::PI;
+        let normalized = (against_vertical + two_pi).rem_euclid(two_pi);
+
+        normalized
+    }
 }
 
 struct AsteroidField {
@@ -105,7 +121,7 @@ impl AsteroidField {
 fn main() {
     let field = AsteroidField::load_from_file(Path::new("./input.txt"));
 
-    let mut best_loc = (None, 0);
+    let mut best: Option<(Coord, usize)> = None;
     for root in field.locs.iter() {
         let score = field.locs
             .iter()
@@ -117,13 +133,38 @@ fn main() {
             .collect::<HashSet<_>>()
             .len();
 
-        if score > best_loc.1 {
-            best_loc = (Some(*root), score);
+        match best {
+            Some((_, curr_best_score)) if curr_best_score > score => (),
+            _ => best = Some((*root, score)),
         }
     }
 
+    dbg!(&best);
+    let station_loc = best.unwrap().0;
 
-    dbg!(&best_loc);
+    let mut targets = field.locs
+        .iter()
+        .filter(|target| **target != station_loc)
+        .map(|target| {
+            let (base, n) = (*target - station_loc).simplify();
+            (target, base, n)
+        })
+        .collect::<Vec<_>>();
+
+    targets.sort_by_key(|(_, _, n)| *n);
+    targets.sort_by(|(_, a, _), (_, b, _)| a.angle().partial_cmp(&b.angle()).unwrap());
+    loop {
+        let (uniques, duplicates) = targets.partition_dedup_by_key(|(_, a, _)| *a);
+
+        if  duplicates.len() == 0 ||
+            duplicates.iter().all(|(_, base, _)| *base == uniques.last().unwrap().1)
+        {
+            break;
+        }
+    }
+
+    assert!(targets.len() >= 200);
+    dbg!(&targets[199]);
 }
 
 #[cfg(test)]
