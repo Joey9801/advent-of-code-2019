@@ -89,13 +89,60 @@ impl System {
             .map(|m| m.energy())
             .sum()
     }
+
+    fn period(&self) -> u64 {
+        fn single_axis_period(positions: &[i32]) -> u64 {
+            let mut positions = positions.iter().cloned().collect::<Vec<_>>();
+            let mut velocities = vec![0; positions.len()];
+            let target_velocities = velocities.clone();
+
+            fn do_step(positions: &mut [i32], velocities: &mut [i32]) {
+                for a in 0..velocities.len() {
+                    for b in (a + 1)..velocities.len() {
+                        let force =  (positions[b] - positions[a]).signum();
+                        velocities[a] += force;
+                        velocities[b] -= force;
+                    }
+                }
+
+                for (pos, vel) in positions.iter_mut().zip(velocities.iter()) {
+                    *pos += vel;
+                }
+            };
+
+            let mut steps = 0u64;
+            loop {
+                do_step(&mut positions, &mut velocities);
+                steps += 1;
+                if velocities == target_velocities {
+                    break;
+                }
+            }
+
+            steps * 2
+        }
+
+        let x_period = single_axis_period(&mut self.moons.iter().map(|m| m.pos.x).collect::<Vec<_>>());
+        let y_period = single_axis_period(&mut self.moons.iter().map(|m| m.pos.y).collect::<Vec<_>>());
+        let z_period = single_axis_period(&mut self.moons.iter().map(|m| m.pos.z).collect::<Vec<_>>());
+
+        lcm3(x_period, y_period, z_period)
+    }
+}
+
+fn gcd(a: u64, b: u64) -> u64 {
+    if b == 0 { a } else { gcd(b, a % b) }
+}
+
+fn lcm(a: u64, b: u64) -> u64 {
+    a * b  / gcd(a, b)
+}
+
+fn lcm3(a: u64, b: u64, c: u64) -> u64 {
+    lcm(a, lcm(b, c))
 }
 
 fn main() {
     let mut system = System::puzzle_input();
-    for _step in 0..1000 {
-        system.step();
-    }
-
-    println!("Step 1000, energy = {}", system.energy());
+    dbg!(system.period());
 }
