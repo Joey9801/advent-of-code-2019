@@ -72,9 +72,11 @@ struct Board {
 
 impl Board {
     fn new() -> Self {
-        // Board starts out entirely black
+        // Board starts out all black except for (0, 0)
+        let mut white_cells = HashSet::new();
+        white_cells.insert(Coord { x: 0, y: 0 });
         Self {
-            white_cells: HashSet::new(),
+            white_cells,
             painted_ever: HashSet::new(),
         }
     }
@@ -94,6 +96,44 @@ impl Board {
             Color::White => self.white_cells.insert(coord),
             Color::Black => self.white_cells.remove(&coord),
         };
+    }
+
+    fn print(&self) {
+        let mut min = Coord { x: 0, y: 0 };
+        let mut max = Coord { x: 0, y: 0 };
+        for white_coord in self.white_cells.iter() {
+            min.x = std::cmp::min(min.x, white_coord.x);
+            min.y = std::cmp::min(min.y, white_coord.y);
+            max.x = std::cmp::max(max.x, white_coord.x);
+            max.y = std::cmp::max(max.y, white_coord.y);
+        }
+
+        let rows = (max.y - min.y + 1) as usize;
+        let cols = (max.x - min.x + 1) as usize;
+
+        // [(min.x, min.y), (min.x + 1, min.y), ... (max.x - 1, max.y), (max.x, max.y)]
+        let mut buff = std::iter::repeat('░')
+            .take(rows * cols)
+            .collect::<Vec<char>>();
+
+        let to_buff_pos = move |c: &Coord| {
+            let x = (c.x - min.x) as usize;
+            let y = (max.y - c.y) as usize;
+            y * cols + x
+        };
+
+        for white_coord in self.white_cells.iter() {
+            buff[to_buff_pos(white_coord)] = '█';
+        }
+
+        for row in buff.chunks(cols) {
+            for _repeat in 0..1 {
+                for c in row {
+                    print!("{}{}", c, c);
+                }
+                println!();
+            }
+        }
     }
 }
 
@@ -166,4 +206,5 @@ fn main() {
     }
 
     dbg!(robot.board.painted_ever.len());
+    robot.board.print();
 }
