@@ -161,7 +161,7 @@ impl Instruction {
 
                 self.write_param(0, state, input);
             }
-            OpCode::WriteOutput => state.outputs.push(self.read_param(0, state)),
+            OpCode::WriteOutput => state.outputs.push_back(self.read_param(0, state)),
             OpCode::JumpIfTrue => {
                 let test = self.read_param(0, state);
                 if test != 0 {
@@ -290,11 +290,11 @@ impl<T: Default + Copy + PartialEq> PartialEq<Vec<T>> for PagedMemory<T> {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct ProgramState {
     pub mem: PagedMemory<ProgramElement>,
     pub inputs: VecDeque<ProgramElement>,
-    pub outputs: Vec<ProgramElement>,
+    pub outputs: VecDeque<ProgramElement>,
     pub program_counter: usize,
     pub relative_base: ProgramElement,
     pub terminated: bool,
@@ -316,8 +316,8 @@ impl ProgramState {
 
         Self {
             mem: initial_mem,
-            inputs: Vec::new().into(),
-            outputs: Vec::new(),
+            inputs: VecDeque::new(),
+            outputs: VecDeque::new(),
             program_counter: 0,
             relative_base: 0,
             terminated: false,
@@ -328,7 +328,7 @@ impl ProgramState {
         Self {
             mem: mem.into(),
             inputs,
-            outputs: Vec::new(),
+            outputs: VecDeque::new(),
             program_counter: 0,
             relative_base: 0,
             terminated: false,
