@@ -5,6 +5,8 @@ use std::path::Path;
 use std::io::Read;
 use std::collections::HashSet;
 
+use util::math::gcd;
+
 
 enum CellContents {
     Empty,
@@ -18,14 +20,6 @@ impl CellContents {
             '#' => CellContents::Asteroid,
             other => panic!("Unrecognized asteroid map char: {}", other),
         }
-    }
-}
-
-fn gcd(a: i32, b: i32) -> i32 {
-    if b == 0 {
-        a
-    } else {
-        gcd(b, a % b)
     }
 }
 

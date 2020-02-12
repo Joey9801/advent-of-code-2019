@@ -1,4 +1,4 @@
-use util::vec3::Vec3;
+use util::{vec3::Vec3, math::lcm3};
 
 #[derive(Clone)]
 struct Moon {
@@ -126,18 +126,6 @@ impl System {
 
         lcm3(x_period, y_period, z_period)
     }
-}
-
-fn gcd(a: u64, b: u64) -> u64 {
-    if b == 0 { a } else { gcd(b, a % b) }
-}
-
-fn lcm(a: u64, b: u64) -> u64 {
-    a * b  / gcd(a, b)
-}
-
-fn lcm3(a: u64, b: u64, c: u64) -> u64 {
-    lcm(a, lcm(b, c))
 }
 
 fn main() {
