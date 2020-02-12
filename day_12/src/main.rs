@@ -1,6 +1,4 @@
-mod vec3;
-
-use vec3::Vec3;
+use util::vec3::Vec3;
 
 #[derive(Clone)]
 struct Moon {
