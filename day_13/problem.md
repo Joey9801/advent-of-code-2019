@@ -12,4 +12,4 @@ The arcade cabinet runs Intcode software like the game the Elves sent (your puzz
 4 is a ball tile. The ball moves diagonally and bounces off objects.
 For example, a sequence of output values like 1,2,3,6,5,4 would draw a horizontal paddle tile (1 tile from the left and 2 tiles from the top) and a ball tile (6 tiles from the left and 5 tiles from the top).
 
-Start the game. How many block tiles are on the screen when the game exits?<Paste>
+Start the game. How many block tiles are on the screen when the game exits?
