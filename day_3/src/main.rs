@@ -163,10 +163,6 @@ impl Wire {
                 parts[0].length_before,
             ))
     }
-
-    fn iter_lengths<'a>(&'a self) -> impl Iterator<Item = u64> + 'a {
-        self.nodes.iter().map(|n| n.length_before)
-    }
 }
 
 fn main()  {

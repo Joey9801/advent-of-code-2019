@@ -17,7 +17,7 @@ fn test_phase_settings(
     while !amps.last().unwrap().terminated {
         amps[idx].inputs.push_back(signal);
         amps[idx].run_to_next_input();
-        signal = *amps[idx].outputs.last().unwrap();
+        signal = *amps[idx].outputs.back().unwrap();
 
         idx = (idx + 1) % amps.len();
     }
@@ -29,7 +29,7 @@ fn main() {
     let program = ProgramState::load_program_file(std::path::Path::new("./input.txt"));
 
     let mut phases = (5..10).collect::<Vec<isize>>();
-    let mut phase_settings = permutohedron::Heap::new(&mut phases);
+    let phase_settings = permutohedron::Heap::new(&mut phases);
 
     let (signal, max_phase_setting) = phase_settings
         .map(|phase_setting| (test_phase_settings(&phase_setting[..], &program), phase_setting))

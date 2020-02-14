@@ -41,6 +41,7 @@ impl System {
     //     <x=2, y=-10, z=-7>
     //     <x=4, y=-8, z=8>
     //     <x=3, y=5, z=-1>
+    #[allow(dead_code)]
     fn example_1() -> Self {
         let mut s = Self::new();
 
@@ -131,4 +132,10 @@ impl System {
 fn main() {
     let mut system = System::puzzle_input();
     dbg!(system.period());
+
+    for _step in 0..1000 {
+        system.step();
+    }
+
+    println!("After 1000 steps, total system energy = {}", system.energy());
 }
