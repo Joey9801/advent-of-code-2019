@@ -1,41 +1,6 @@
 use std::collections::HashSet;
 
-
-enum Rotation {
-    Clockwise,
-    CounterClockwise,
-}
-
-#[derive(Clone, Copy, Debug)]
-enum CardDir {
-    Up,
-    Down,
-    Left,
-    Right,
-}
-
-impl CardDir {
-    fn turn(self, rot: Rotation) -> Self {
-        let dirnum: i32 = match &self {
-            CardDir::Up => 0,
-            CardDir::Left => 1,
-            CardDir::Down => 2,
-            CardDir::Right => 3,
-        };
-        let rotnum: i32 = match rot {
-            Rotation::Clockwise => 1,
-            Rotation::CounterClockwise => -1,
-        };
-
-        match (dirnum + rotnum).rem_euclid(4) {
-            0 => CardDir::Up,
-            1 => CardDir::Left,
-            2 => CardDir::Down,
-            3 => CardDir::Right,
-            wat => unreachable!("i32.rem_euclid(4) returned {}, which isn't in {{0, 1, 2, 3}}", wat),
-        }
-    }
-}
+use util::geometry::{Rotation, CardDir};
 
 #[derive(Debug)]
 enum Color {
