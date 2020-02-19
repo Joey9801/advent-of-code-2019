@@ -1,35 +1,37 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::{HashMap};
 use std::fs::File;
 use std::io::{BufRead, BufReader};
 use std::path::Path;
 use std::iter::FromIterator;
+use std::cmp::Ordering;
 
 #[derive(Clone, Copy, Debug, Hash, PartialEq, Eq)]
 struct CompoundId(usize);
 
+/// Maps compound names to integer IDs.
+///
+/// Guarantees that issued IDs are in the range (0, CompoundBook::len()]
+/// ORE and FUEL have static IDs of CompoundId(0) and CompoundId(1) respectively.
 struct CompoundBook {
     name_to_id_map: HashMap<String, CompoundId>,
-    counter: CompoundId,
 }
 
 impl CompoundBook {
     fn new() -> Self {
         Self {
             name_to_id_map: HashMap::new(),
-            counter: CompoundId(0),
         }
     }
 
-    fn get(&self, name: &str) -> Option<CompoundId> {
-        self.name_to_id_map.get(name).map(|id| *id)
+    fn len(&self) -> usize {
+        self.name_to_id_map.len()
     }
 
     fn get_or_add(&mut self, name: &str) -> CompoundId {
         if let Some(id) = self.name_to_id_map.get(name) {
             *id
         } else {
-            let id = self.counter;
-            self.counter.0 += 1;
+            let id = CompoundId(self.name_to_id_map.len());
             self.name_to_id_map.insert(name.to_string(), id);
             id
         }
@@ -39,7 +41,7 @@ impl CompoundBook {
 #[derive(Debug, PartialEq, Eq, Hash)]
 struct RecipeComponent {
     compound: CompoundId,
-    quantity: u32,
+    quantity: u64,
 }
 
 #[derive(Debug)]
@@ -117,17 +119,17 @@ impl RecipeBook {
 }
 
 
-/// Calculates how much ORE is needed to make 1 FUEL
-fn part_1(recipes: &RecipeBook) -> u32 {
-    let mut needs = std::iter::repeat(0u32)
-        .take(recipes.compounds.counter.0)
+/// Calculates how much ORE is needed to make a given amount of FUEL
+fn ore_for_fuel(recipes: &RecipeBook, required_fuel: u64) -> u64 {
+    let mut needs = std::iter::repeat(0u64)
+        .take(recipes.compounds.len())
         .collect::<Vec<_>>();
     let mut leftovers = needs.clone();
 
     let ore_idx = 0usize;
     let fuel_idx = 1usize;
 
-    needs[fuel_idx] = 1;
+    needs[fuel_idx] = required_fuel;
 
     let mut any_work_done = true;
     while any_work_done {
@@ -165,22 +167,47 @@ fn part_1(recipes: &RecipeBook) -> u32 {
     needs[ore_idx]
 }
 
+/// How much FUEL can be made from a given amount of ore
+fn fuel_for_ore(recipes: &RecipeBook, given_ore: u64) -> u64 {
+    // Just do a binary search on ore_for_fuel
+
+    let mut low = 0u64;
+    let mut high = None;
+
+    while low + 1 < high.unwrap_or(u64::max_value()) {
+        let test = match high {
+            Some(high) => (low + high) / 2,
+            None => (low * 2) + 1,
+        };
+
+        let ore_for_test = ore_for_fuel(recipes, test);
+
+        match given_ore.cmp(&ore_for_test) {
+            Ordering::Less => high = Some(test),
+            Ordering::Greater => low = test,
+            Ordering::Equal => return test,
+        }
+    }
+
+    low
+}
+
 fn main() {
     let recipe_book = RecipeBook::load_from_file(Path::new("./input.txt"));
     
     // Sanity check that there is only one way to make each thing
     {
-        let mut outputs = HashMap::new();
+        let mut outputs = std::iter::repeat(0)
+            .take(recipe_book.compounds.len())
+            .collect::<Vec<_>>();
         for recipe in &recipe_book.recipes {
-            if !outputs.contains_key(&recipe.output.compound) {
-                outputs.insert(recipe.output.compound, 0);
-            }
-            *outputs.get_mut(&recipe.output.compound).unwrap() += 1;
+            outputs[recipe.output.compound.0] += 1;
         }
-        if outputs.values().max() != Some(&1) {
+        if outputs.iter().max() != Some(&1) {
             panic!("There are multiple ways to make some compounds");
         }
     }
 
-    dbg!(part_1(&recipe_book));
+    dbg!(ore_for_fuel(&recipe_book, 1));
+    dbg!(fuel_for_ore(&recipe_book, 1000_000_000_000));
 }
