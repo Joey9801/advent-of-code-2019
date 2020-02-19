@@ -1,4 +1,5 @@
 use std::path::Path;
+use std::collections::HashMap;
 
 use intcode_vm::{ProgramState};
 use util::geometry::{CardDir, Rotation};
@@ -52,17 +53,22 @@ struct DfsStackElement {
     position: Vec2,
     from_dir: Option<CardDir>,
     last_search_dir: Option<CardDir>,
+    on_oxygen: bool,
 }
 
-fn part_1() -> usize {
-    let mut robot = Robot::new();
+// At each new step, calls the step callback
+// If the step_calllback returns true, stops the iteration early.
+fn maze_dfs<F>(robot: &mut Robot, mut step_callback: F)
+where
+    F: FnMut(&[DfsStackElement]) -> bool
+{
     let mut dfs_stack = Vec::new();
-    let mut shortest_path_to_oxygen = None;
 
     dfs_stack.push(DfsStackElement {
         position: Vec2::new(0, 0),
         from_dir: None,
         last_search_dir: None,
+        on_oxygen: false,
     });
 
     loop {
@@ -99,23 +105,59 @@ fn part_1() -> usize {
                         position: head.position + search_dir.vec(),
                         from_dir: Some(search_dir.opposite()),
                         last_search_dir: None,
+                        on_oxygen: explore_result == RobotResponse::FoundOxygen,
                     };
                     dfs_stack.push(new_stage);
                 }
             },
         }
 
-        if explore_result == RobotResponse::FoundOxygen {
-            shortest_path_to_oxygen = Some(match shortest_path_to_oxygen {
-                Some(d) => std::cmp::min(d, dfs_stack.len() - 1),
-                None => dfs_stack.len() - 1,
-            });
+        if step_callback(&dfs_stack) {
+            break;
         }
     }
+}
 
-    shortest_path_to_oxygen.expect("Didn't find any path to oxygen")
+fn part_1() -> usize {
+    let mut robot = Robot::new();
+    let mut min_oxygen_distance = None;
+    maze_dfs(&mut robot, |stack| {
+        if stack.last().unwrap().on_oxygen {
+            min_oxygen_distance = Some(match min_oxygen_distance {
+                Some(d) => std::cmp::min(d, stack.len() - 1),
+                None => stack.len() - 1,
+            });
+        }
+        false
+    });
+
+    min_oxygen_distance.expect("Didn't find any path to oxygen")
+}
+
+fn part_2() -> usize {
+    let mut robot = Robot::new();
+
+    // Walk the robot to the oxygen and leave it there
+    maze_dfs(&mut robot, |stack| stack.last().unwrap().on_oxygen);
+
+    // Maps Position to minimum distance to that position
+    let mut postiion_map = HashMap::<Vec2, usize>::new();
+
+    maze_dfs(&mut robot, |stack| {
+        let pos = stack.last().unwrap().position.clone();
+        let curr = stack.len() - 1;
+        match postiion_map.get(&pos) {
+            Some(stored) if *stored <= curr => (),
+            _ => { postiion_map.insert(pos, curr); }
+        }
+
+        false
+    });
+
+    *postiion_map.values().max().unwrap()
 }
 
 fn main() {
     dbg!(part_1());
+    dbg!(part_2());
 }
